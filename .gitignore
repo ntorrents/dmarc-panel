@@ -1,0 +1,15 @@
+# Entorno virtual
+venv/
+
+# Archivos temporales
+__pycache__/
+*.py[cod]
+
+# Base de datos
+*.sqlite3
+
+# Variables de entorno
+.env
+
+# macOS
+.DS_Store
