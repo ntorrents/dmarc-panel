@@ -1,30 +1,34 @@
 from django.db import models
-from django.contrib.auth.models import User
-
-# Create your models here.
+from django.conf import settings
 
 class Domain(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    active = models.BooleanField(default=True)
+    client_name = models.CharField(max_length=255, blank=True, null=True)
+    client_company = models.CharField(max_length=255, blank=True, null=True)
+    compliance_level = models.CharField(max_length=50, blank=True, null=True)  # para filtrado posterior
+    tag = models.CharField(max_length=50, blank=True, null=True)
 
-class SPFRecord(models.Model):
-    domain = models.OneToOneField(Domain, on_delete=models.CASCADE)
-    record_text = models.TextField()
-    updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.name
 
-class DKIMKey(models.Model):
-    domain = models.ForeignKey(Domain, on_delete=models.CASCADE)
-    selector = models.CharField(max_length=100)
-    public_key = models.TextField()
-    private_key = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
 
-class DMARCRecord(models.Model):
-    domain = models.OneToOneField(Domain, on_delete=models.CASCADE)
-    policy = models.CharField(max_length=10)
-    rua = models.TextField()
-    ruf = models.TextField(blank=True, null=True)
-    pct = models.IntegerField(default=100)
-    record_text = models.TextField()
-    updated_at = models.DateTimeField(auto_now=True)
+class DNSRecord(models.Model):
+    DNS_TYPE_CHOICES = [
+        ('SPF', 'SPF'),
+        ('DKIM', 'DKIM'),
+        ('DMARC', 'DMARC'),
+    ]
+
+    domain = models.ForeignKey(Domain, on_delete=models.CASCADE, related_name='dns_records')
+    type = models.CharField(max_length=10, choices=DNS_TYPE_CHOICES)
+    value = models.TextField()
+    status = models.CharField(max_length=50, default='pending')  # valid, invalid, error, etc.
+    last_checked = models.DateTimeField(auto_now=True)
+    selector = models.CharField(max_length=100, blank=True, null=True)  # solo para DKIM
+    policy = models.CharField(max_length=10, blank=True, null=True)     # solo para DMARC
+
+    def __str__(self):
+        return f"{self.domain.name} - {self.type}"
