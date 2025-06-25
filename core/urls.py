@@ -40,6 +40,5 @@ urlpatterns = [
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),  # LOGIN JWT
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # REFRESH JWT
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('auth/', include('accounts.urls')),
 
 ]

@@ -7,6 +7,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from .serializers import UserRegistrationSerializer, UserSerializer
 from panel.utils import log_audit_event, get_client_ip
+from rest_framework.permissions import AllowAny
+
 
 User = get_user_model()
 
@@ -32,34 +34,23 @@ class RegisterView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         email = request.data.get('email')
         password = request.data.get('password')
 
         if not email or not password:
-            return Response({
-                'detail': 'Email and password are required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Email y contraseña son requeridos'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({
-                'detail': 'Usuario no encontrado'
-            }, status=status.HTTP_404_NOT_FOUND)
+        user = authenticate(request=request, email=email, password=password)
+        if not user or not user.is_active:
+            return Response({'detail': 'Credenciales inválidas o cuenta deshabilitada'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Authenticate using email as username
-        user = authenticate(request, username=user.username, password=password)
+        refresh = RefreshToken.for_user(user)
 
-        if user is not None:
-            if not user.is_active:
-                return Response({
-                    'detail': 'Account is disabled'
-                }, status=status.HTTP_401_UNAUTHORIZED)
-            
-            refresh = RefreshToken.for_user(user)
-            access_token = str(refresh.access_token)
-
+        # Opcional: log de auditoría
+        if 'log_audit_event' in globals():
             log_audit_event(
                 user=user,
                 action='login',
@@ -67,16 +58,12 @@ class LoginView(APIView):
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
 
-            return Response({
-                'message': 'Login correcto',
-                'access': access_token,
-                'refresh': str(refresh),
-                'user': UserSerializer(user).data
-            }, status=status.HTTP_200_OK)
-        else:
-            return Response({
-                'detail': 'Credenciales inválidas'
-            }, status=status.HTTP_401_UNAUTHORIZED)
+        return Response({
+            'message': 'Login correcto',
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': UserSerializer(user).data
+        }, status=status.HTTP_200_OK)
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]

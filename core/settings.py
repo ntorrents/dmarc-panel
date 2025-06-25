@@ -221,3 +221,8 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
+
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.EmailBackend',  # tu backend personalizado
+    'django.contrib.auth.backends.ModelBackend',  # para compatibilidad con admin, etc.
+]
