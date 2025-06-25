@@ -226,7 +226,7 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = False  # Set to True in production
 
 # Custom authentication backend
 AUTHENTICATION_BACKENDS = [
@@ -239,6 +239,9 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    
 ]
 
 # CSRF Settings
@@ -247,4 +250,6 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
 ]
