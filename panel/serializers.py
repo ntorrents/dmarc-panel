@@ -1,34 +1,27 @@
 from rest_framework import serializers
-from .models import Cliente, Dominio, DNSRecord, Tag, DominioUsuarioAcceso, AuditLog, SystemSetting
-from accounts.models import User
+from .models import Dominio, DNSRecord, Tag, AuditLog, SystemSetting
+from accounts.models import User, Empresa
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
-        fields = ['id', 'nombre', 'color', 'descripcion']
+        fields = ['id', 'nombre', 'color', 'descripcion', 'empresa', 'creado_en']
+        read_only_fields = ['id', 'creado_en']
 
-class ClienteSerializer(serializers.ModelSerializer):
-    total_dominios = serializers.SerializerMethodField()
-    dominios_activos = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Cliente
-        fields = [
-            'id', 'nombre', 'email', 'empresa', 'telefono', 'direccion',
-            'activo', 'creado_en', 'actualizado_en', 'total_dominios', 'dominios_activos'
-        ]
-        read_only_fields = ['creado_en', 'actualizado_en']
-
-    def get_total_dominios(self, obj):
-        return obj.dominios.count()
-
-    def get_dominios_activos(self, obj):
-        return obj.dominios.filter(activo=True).count()
+    def validate(self, data):
+        # Ensure tag belongs to user's company (unless super admin)
+        request = self.context.get('request')
+        if request and request.user:
+            if not request.user.is_super_admin:
+                if request.user.empresa:
+                    data['empresa'] = request.user.empresa
+                else:
+                    raise serializers.ValidationError("Usuario debe pertenecer a una empresa")
+        return data
 
 class DominioListSerializer(serializers.ModelSerializer):
     """Simplified serializer for list views"""
-    cliente_nombre = serializers.CharField(source='cliente.nombre', read_only=True)
-    cliente_empresa = serializers.CharField(source='cliente.empresa', read_only=True)
+    empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
     tags = TagSerializer(many=True, read_only=True)
     total_dns_records = serializers.ReadOnlyField()
     valid_dns_records = serializers.ReadOnlyField()
@@ -37,14 +30,17 @@ class DominioListSerializer(serializers.ModelSerializer):
         model = Dominio
         fields = [
             'id', 'nombre', 'activo', 'status', 'compliance_level', 'dmarc_policy',
-            'cliente_nombre', 'cliente_empresa', 'tags', 'creado_en', 'actualizado_en',
+            'empresa', 'empresa_nombre', 'tags', 'creado_en', 'actualizado_en',
             'total_dns_records', 'valid_dns_records', 'last_dns_check', 'dns_check_status'
         ]
 
 class DominioSerializer(serializers.ModelSerializer):
-    cliente = serializers.PrimaryKeyRelatedField(queryset=Cliente.objects.all())
-    cliente_details = ClienteSerializer(source='cliente', read_only=True)
-    tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), many=True, required=False)
+    empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
+    tags = serializers.PrimaryKeyRelatedField(
+        queryset=Tag.objects.all(), 
+        many=True, 
+        required=False
+    )
     tags_details = TagSerializer(source='tags', many=True, read_only=True)
     total_dns_records = serializers.ReadOnlyField()
     valid_dns_records = serializers.ReadOnlyField()
@@ -52,13 +48,13 @@ class DominioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dominio
         fields = [
-            'id', 'cliente', 'cliente_details', 'nombre', 'activo', 'status',
+            'id', 'empresa', 'empresa_nombre', 'nombre', 'activo', 'status',
             'compliance_level', 'dmarc_policy', 'dns_provider', 'dns_provider_zone_id',
-            'tags', 'tags_details', 'notification_email', 'notify_on_changes', 'notify_on_expiration',
-            'creado_en', 'actualizado_en', 'last_dns_check', 'dns_check_status',
-            'expiration_date', 'total_dns_records', 'valid_dns_records'
+            'tags', 'tags_details', 'notification_email', 'notify_on_changes', 
+            'notify_on_expiration', 'creado_en', 'actualizado_en', 'last_dns_check', 
+            'dns_check_status', 'expiration_date', 'total_dns_records', 'valid_dns_records'
         ]
-        read_only_fields = ['creado_en', 'actualizado_en', 'last_dns_check', 'dns_check_status']
+        read_only_fields = ['id', 'creado_en', 'actualizado_en', 'last_dns_check', 'dns_check_status']
 
     def validate_nombre(self, value):
         """Validate domain name format"""
@@ -68,8 +64,31 @@ class DominioSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Formato de dominio inválido")
         return value.lower()
 
+    def validate(self, data):
+        # Ensure domain belongs to user's company (unless super admin)
+        request = self.context.get('request')
+        if request and request.user:
+            if not request.user.is_super_admin:
+                if request.user.empresa:
+                    data['empresa'] = request.user.empresa
+                else:
+                    raise serializers.ValidationError("Usuario debe pertenecer a una empresa")
+        return data
+
+    def validate_tags(self, tags):
+        """Ensure tags belong to the same company as the domain"""
+        request = self.context.get('request')
+        if request and request.user and not request.user.is_super_admin:
+            user_empresa = request.user.empresa
+            if user_empresa:
+                for tag in tags:
+                    if tag.empresa != user_empresa:
+                        raise serializers.ValidationError(
+                            f"Tag '{tag.nombre}' no pertenece a tu empresa"
+                        )
+        return tags
+
 class DNSRecordSerializer(serializers.ModelSerializer):
-    dominio = serializers.PrimaryKeyRelatedField(queryset=Dominio.objects.all())
     dominio_nombre = serializers.CharField(source='dominio.nombre', read_only=True)
     creado_por_username = serializers.CharField(source='creado_por.username', read_only=True)
 
@@ -80,7 +99,7 @@ class DNSRecordSerializer(serializers.ModelSerializer):
             'estado', 'ultima_comprobacion', 'error_message', 'selector', 'policy',
             'creado_en', 'actualizado_en', 'creado_por', 'creado_por_username'
         ]
-        read_only_fields = ['ultima_comprobacion', 'creado_en', 'actualizado_en']
+        read_only_fields = ['id', 'ultima_comprobacion', 'creado_en', 'actualizado_en']
 
     def validate(self, data):
         """Custom validation for DNS records"""
@@ -110,38 +129,18 @@ class DNSRecordSerializer(serializers.ModelSerializer):
         
         return data
 
-class DominioUsuarioAccesoSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
-    user_details = serializers.SerializerMethodField()
-    dominio = serializers.PrimaryKeyRelatedField(queryset=Dominio.objects.all())
-    dominio_nombre = serializers.CharField(source='dominio.nombre', read_only=True)
-    creado_por_username = serializers.CharField(source='creado_por.username', read_only=True)
-
-    class Meta:
-        model = DominioUsuarioAcceso
-        fields = [
-            'id', 'user', 'user_details', 'dominio', 'dominio_nombre', 'rol',
-            'creado_en', 'creado_por', 'creado_por_username'
-        ]
-        read_only_fields = ['creado_en']
-
-    def get_user_details(self, obj):
-        return {
-            'username': obj.user.username,
-            'email': obj.user.email,
-            'first_name': obj.user.first_name,
-            'last_name': obj.user.last_name,
-        }
-
 class AuditLogSerializer(serializers.ModelSerializer):
     user_username = serializers.CharField(source='user.username', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
     content_type_name = serializers.CharField(source='content_type.model', read_only=True)
 
     class Meta:
         model = AuditLog
         fields = [
-            'id', 'user', 'user_username', 'action', 'timestamp', 'content_type',
-            'content_type_name', 'object_id', 'object_repr', 'changes', 'ip_address', 'user_agent'
+            'id', 'user', 'user_username', 'user_email', 'empresa', 'empresa_nombre',
+            'action', 'timestamp', 'content_type', 'content_type_name', 'object_id', 
+            'object_repr', 'changes', 'ip_address', 'user_agent'
         ]
         read_only_fields = ['timestamp']
 
@@ -155,7 +154,7 @@ class SystemSettingSerializer(serializers.ModelSerializer):
             'id', 'key', 'value', 'value_type', 'description', 'is_sensitive',
             'created_at', 'updated_at', 'updated_by', 'updated_by_username', 'display_value'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_display_value(self, obj):
         """Return masked value for sensitive settings"""
@@ -173,13 +172,13 @@ class SystemSettingSerializer(serializers.ModelSerializer):
 # Bulk operation serializers
 class BulkDomainUpdateSerializer(serializers.Serializer):
     domain_ids = serializers.ListField(
-        child=serializers.IntegerField(),
+        child=serializers.UUIDField(),
         min_length=1
     )
     updates = serializers.DictField()
 
 class BulkDNSRecordCreateSerializer(serializers.Serializer):
-    domain_id = serializers.IntegerField()
+    domain_id = serializers.UUIDField()
     records = DNSRecordSerializer(many=True)
 
     def validate_domain_id(self, value):
