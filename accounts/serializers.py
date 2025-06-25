@@ -1,8 +1,38 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from .models import Empresa, Role
 
 User = get_user_model()
+
+class EmpresaSerializer(serializers.ModelSerializer):
+    total_usuarios = serializers.SerializerMethodField()
+    total_dominios = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Empresa
+        fields = [
+            'id', 'nombre', 'direccion', 'activo', 'creado_en', 
+            'actualizado_en', 'total_usuarios', 'total_dominios'
+        ]
+        read_only_fields = ['id', 'creado_en', 'actualizado_en']
+
+    def get_total_usuarios(self, obj):
+        return obj.usuarios.filter(activo=True).count()
+
+    def get_total_dominios(self, obj):
+        return getattr(obj, 'total_dominios', 0)
+
+class RoleSerializer(serializers.ModelSerializer):
+    total_usuarios = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Role
+        fields = ['id', 'nombre', 'descripcion', 'permisos', 'total_usuarios']
+        read_only_fields = ['id']
+
+    def get_total_usuarios(self, obj):
+        return obj.usuarios.filter(activo=True).count()
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -10,16 +40,19 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password_confirm', 'first_name', 'last_name']
+        fields = [
+            'username', 'email', 'password', 'password_confirm', 
+            'first_name', 'last_name', 'empresa', 'role'
+        ]
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError("Passwords don't match")
+            raise serializers.ValidationError("Las contraseñas no coinciden")
         return attrs
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A user with this email already exists")
+            raise serializers.ValidationError("Ya existe un usuario con este email")
         return value
 
     def create(self, validated_data):
@@ -29,15 +62,39 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
+    role_nombre = serializers.CharField(source='role.get_nombre_display', read_only=True)
     full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
-            'rol', 'empresa', 'empresa_nombre', 'is_active', 'date_joined', 'last_login'
+            'empresa', 'empresa_nombre', 'role', 'role_nombre', 'activo', 
+            'date_joined', 'last_login', 'ultimo_acceso'
         ]
-        read_only_fields = ['id', 'date_joined', 'last_login']
+        read_only_fields = ['id', 'date_joined', 'last_login', 'ultimo_acceso']
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """Serializer for user's own profile"""
+    empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
+    role_nombre = serializers.CharField(source='role.get_nombre_display', read_only=True)
+    permissions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'empresa', 'empresa_nombre', 'role', 'role_nombre', 'permissions'
+        ]
+        read_only_fields = ['id', 'empresa', 'role']
+
+    def get_permissions(self, obj):
+        return {
+            'is_super_admin': obj.is_super_admin,
+            'is_company_admin': obj.is_company_admin,
+            'can_edit_config': obj.can_edit_config,
+            'is_read_only': obj.is_read_only,
+        }

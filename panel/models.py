@@ -1,39 +1,26 @@
 from django.db import models
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
-from accounts.models import User
+from accounts.models import User, Empresa
+import uuid
 import json
 
-class Cliente(models.Model):
-    nombre = models.CharField(max_length=100)
-    email = models.EmailField(unique=True)
-    empresa = models.CharField(max_length=100, blank=True, null=True)
-    telefono = models.CharField(max_length=20, blank=True, null=True)
-    direccion = models.TextField(blank=True, null=True)
-    activo = models.BooleanField(default=True)
-    creado_en = models.DateTimeField(auto_now_add=True)
-    actualizado_en = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = "Cliente"
-        verbose_name_plural = "Clientes"
-        ordering = ['nombre']
-
-    def __str__(self):
-        return f"{self.nombre} ({self.empresa or 'Sin empresa'})"
-
 class Tag(models.Model):
-    nombre = models.CharField(max_length=50, unique=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    nombre = models.CharField(max_length=50)
     color = models.CharField(max_length=7, default='#007bff', help_text="Color en formato hexadecimal")
     descripcion = models.TextField(blank=True, null=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='tags')
+    creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "Tag"
         verbose_name_plural = "Tags"
         ordering = ['nombre']
+        unique_together = ['nombre', 'empresa']
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} ({self.empresa.nombre})"
 
 class Dominio(models.Model):
     COMPLIANCE_CHOICES = [
@@ -56,8 +43,9 @@ class Dominio(models.Model):
         ('error', 'Error'),
     ]
 
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='dominios')
-    nombre = models.CharField(max_length=255, unique=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='dominios')
+    nombre = models.CharField(max_length=255)
     activo = models.BooleanField(default=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -94,9 +82,10 @@ class Dominio(models.Model):
         verbose_name = "Dominio"
         verbose_name_plural = "Dominios"
         ordering = ['-creado_en']
+        unique_together = ['nombre', 'empresa']
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} ({self.empresa.nombre})"
 
     @property
     def total_dns_records(self):
@@ -126,6 +115,7 @@ class DNSRecord(models.Model):
         ('warning', 'Warning'),
     ]
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     dominio = models.ForeignKey(Dominio, on_delete=models.CASCADE, related_name='registros')
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES)
     nombre = models.CharField(max_length=255, help_text="Nombre del registro (ej: @, www, mail)")
@@ -158,33 +148,6 @@ class DNSRecord(models.Model):
     def __str__(self):
         return f"{self.dominio.nombre} - {self.tipo} ({self.nombre})"
 
-class DominioUsuarioAcceso(models.Model):
-    ROLE_CHOICES = [
-        ('admin', 'Admin'),
-        ('editor', 'Editor'),
-        ('viewer', 'Viewer'),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='domain_accesses')
-    dominio = models.ForeignKey(Dominio, on_delete=models.CASCADE, related_name='user_accesses')
-    rol = models.CharField(max_length=20, choices=ROLE_CHOICES, default='viewer')
-    creado_en = models.DateTimeField(auto_now_add=True)
-    creado_por = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name='granted_accesses'
-    )
-
-    class Meta:
-        unique_together = ('user', 'dominio')
-        verbose_name = "Acceso de Usuario a Dominio"
-        verbose_name_plural = "Accesos de Usuarios a Dominios"
-
-    def __str__(self):
-        return f"{self.user.username} - {self.dominio.nombre} ({self.rol})"
-
 class AuditLog(models.Model):
     ACTION_CHOICES = [
         ('create', 'Created'),
@@ -196,13 +159,15 @@ class AuditLog(models.Model):
         ('bulk_operation', 'Bulk Operation'),
     ]
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, null=True, blank=True)
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
     
     # Generic foreign key to track any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, null=True, blank=True)
-    object_id = models.PositiveIntegerField(null=True, blank=True)
+    object_id = models.CharField(max_length=255, null=True, blank=True)  # Changed to CharField for UUID support
     content_object = GenericForeignKey('content_type', 'object_id')
     
     # Additional details
@@ -240,6 +205,7 @@ class SystemSetting(models.Model):
         ('json', 'JSON'),
     ]
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     key = models.CharField(max_length=100, unique=True)
     value = models.TextField()
     value_type = models.CharField(max_length=20, choices=VALUE_TYPE_CHOICES, default='string')

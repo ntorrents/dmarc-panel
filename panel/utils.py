@@ -22,10 +22,16 @@ def log_audit_event(user, action, content_object=None, changes=None, ip_address=
         'changes': changes or {}
     }
     
+    # Set empresa from user or content_object
+    if user and user.empresa:
+        audit_data['empresa'] = user.empresa
+    elif content_object and hasattr(content_object, 'empresa'):
+        audit_data['empresa'] = content_object.empresa
+    
     if content_object:
         audit_data.update({
             'content_type': ContentType.objects.get_for_model(content_object),
-            'object_id': content_object.pk,
+            'object_id': str(content_object.pk),  # Convert to string for UUID support
             'object_repr': str(content_object)
         })
     
