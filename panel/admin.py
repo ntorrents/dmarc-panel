@@ -4,7 +4,8 @@ from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from .models import Cliente, Dominio, DNSRecord, Tag, DominioUsuarioAcceso, AuditLog, SystemSetting
+from .models import Dominio, DNSRecord, Tag, AuditLog, SystemSetting
+from accounts.models import Empresa
 
 User = get_user_model()
 
@@ -25,18 +26,18 @@ class TagAdmin(admin.ModelAdmin):
         )
     color_display.short_description = 'Color'
 
-@admin.register(Cliente)
-class ClienteAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'email', 'empresa', 'activo', 'total_dominios', 'creado_en')
-    list_filter = ('activo', 'empresa', 'creado_en')
-    search_fields = ('nombre', 'email', 'empresa')
+@admin.register(Empresa)
+class EmpresaAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'activo', 'total_dominios', 'creado_en')
+    list_filter = ('activo', 'creado_en')
+    search_fields = ('nombre', 'direccion')
     readonly_fields = ('creado_en', 'actualizado_en')
     fieldsets = (
         ('Información Básica', {
-            'fields': ('nombre', 'email', 'empresa', 'activo')
+            'fields': ('nombre', 'activo')
         }),
         ('Contacto', {
-            'fields': ('telefono', 'direccion')
+            'fields': ('direccion',)
         }),
         ('Metadatos', {
             'fields': ('creado_en', 'actualizado_en'),
@@ -47,7 +48,7 @@ class ClienteAdmin(admin.ModelAdmin):
     def total_dominios(self, obj):
         count = obj.dominios.count()
         if count > 0:
-            url = reverse('admin:panel_dominio_changelist') + f'?cliente__id__exact={obj.id}'
+            url = reverse('admin:panel_dominio_changelist') + f'?empresa__id__exact={obj.id}'
             return format_html('<a href="{}">{} dominios</a>', url, count)
         return '0 dominios'
     total_dominios.short_description = 'Total Dominios'
@@ -55,21 +56,21 @@ class ClienteAdmin(admin.ModelAdmin):
 @admin.register(Dominio)
 class DominioAdmin(admin.ModelAdmin):
     list_display = (
-        'nombre', 'cliente', 'status', 'activo', 'compliance_level', 
+        'nombre', 'empresa', 'status', 'activo', 'compliance_level', 
         'dmarc_policy', 'total_records', 'last_dns_check', 'creado_en'
     )
     list_filter = (
         'activo', 'status', 'compliance_level', 'dmarc_policy', 
         'dns_provider', 'notify_on_changes', 'creado_en'
     )
-    search_fields = ('nombre', 'cliente__nombre', 'cliente__empresa')
-    autocomplete_fields = ('cliente',)
+    search_fields = ('nombre', 'empresa__nombre')
+    autocomplete_fields = ('empresa',)
     filter_horizontal = ('tags',)
     readonly_fields = ('creado_en', 'actualizado_en', 'last_dns_check', 'dns_check_status')
     
     fieldsets = (
         ('Información Básica', {
-            'fields': ('cliente', 'nombre', 'activo', 'status')
+            'fields': ('empresa', 'nombre', 'activo', 'status')
         }),
         ('Configuración DMARC', {
             'fields': ('compliance_level', 'dmarc_policy')
@@ -133,16 +134,6 @@ class DNSRecordAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('dominio', 'creado_por')
 
-@admin.register(DominioUsuarioAcceso)
-class DominioUsuarioAccesoAdmin(admin.ModelAdmin):
-    list_display = ('user', 'dominio', 'rol', 'creado_en', 'creado_por')
-    list_filter = ('rol', 'creado_en')
-    search_fields = ('user__username', 'user__email', 'dominio__nombre')
-    autocomplete_fields = ('user', 'dominio', 'creado_por')
-    readonly_fields = ('creado_en',)
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('user', 'dominio', 'creado_por')
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
