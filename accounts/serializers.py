@@ -62,39 +62,60 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
-    role_nombre = serializers.CharField(source='role.get_nombre_display', read_only=True)
     full_name = serializers.SerializerMethodField()
+    computed_role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
-            'empresa', 'empresa_nombre', 'role', 'role_nombre', 'activo', 
-            'date_joined', 'last_login', 'ultimo_acceso'
+            'empresa', 'empresa_nombre', 'activo', 
+            'date_joined', 'last_login', 'ultimo_acceso',
+            'computed_role'
         ]
         read_only_fields = ['id', 'date_joined', 'last_login', 'ultimo_acceso']
+
+    def get_computed_role(self, obj):
+        if obj.is_superuser:
+            return "super_admin"
+        elif obj.is_staff:
+            return "client_admin"
+        else:
+            return "user"
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
+        return f"{obj.first_name} {obj.last_name}".strip() or obj.username
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user's own profile"""
     empresa_nombre = serializers.CharField(source='empresa.nombre', read_only=True)
-    role_nombre = serializers.CharField(source='role.get_nombre_display', read_only=True)
     permissions = serializers.SerializerMethodField()
+    computed_role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'empresa', 'empresa_nombre', 'role', 'role_nombre', 'permissions'
+            'empresa', 'empresa_nombre', 'permissions', 'computed_role'
         ]
-        read_only_fields = ['id', 'empresa', 'role']
+        read_only_fields = ['id', 'empresa']
 
     def get_permissions(self, obj):
         return {
-            'is_super_admin': obj.is_super_admin,
-            'is_company_admin': obj.is_company_admin,
-            'can_edit_config': obj.can_edit_config,
-            'is_read_only': obj.is_read_only,
+            'is_super_admin': bool(obj.is_super_admin),
+            'is_company_admin': bool(obj.is_company_admin),
+            'can_edit_config': bool(obj.can_edit_config),
+            'is_read_only': bool(obj.is_read_only),
         }
+
+    def get_computed_role(self, obj):
+        if obj.is_superuser:
+            return "super_admin"
+        elif obj.is_staff:
+            return "client_admin"
+        else:
+            return "user"
+

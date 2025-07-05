@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions, status, filters
+from rest_framework import viewsets, permissions, status, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -10,6 +10,7 @@ from .serializers import (
     TagSerializer, AuditLogSerializer, SystemSettingSerializer,
     BulkDomainUpdateSerializer, BulkDNSRecordCreateSerializer
 )
+from accounts.models import Empresa
 from .permissions import CanManageDomain, CanManageCompanyData, IsReadOnlyOrCanEdit
 from .utils import log_audit_event, get_client_ip
 from accounts.permissions import IsSuperAdmin
@@ -40,6 +41,7 @@ class TagViewSet(viewsets.ModelViewSet):
         )
 
 class DominioViewSet(viewsets.ModelViewSet):
+    serializer_class = DominioSerializer
     permission_classes = [permissions.IsAuthenticated, CanManageDomain]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['activo', 'status', 'compliance_level', 'dmarc_policy', 'tags']
@@ -63,9 +65,14 @@ class DominioViewSet(viewsets.ModelViewSet):
         return Dominio.objects.none()
 
     def perform_create(self, serializer):
-        dominio = serializer.save()
+        user = self.request.user
+        if not user.empresa:
+            raise serializers.ValidationError("El usuario no tiene una empresa asignada")
+
+        dominio = serializer.save(empresa=user.empresa)
+
         log_audit_event(
-            user=self.request.user,
+            user=user,
             action='create',
             content_object=dominio,
             ip_address=get_client_ip(self.request),

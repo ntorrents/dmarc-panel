@@ -1,16 +1,24 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from .models import Dominio, DNSRecord, Tag, AuditLog, SystemSetting
+from .models import Dominio, DNSRecord, Tag, AuditLog, SystemSetting, User, Empresa
 from accounts.models import Empresa
 
 User = get_user_model()
 
-# Register the custom User model
+
+class UserAdmin(BaseUserAdmin):
+    fieldsets = BaseUserAdmin.fieldsets + (
+        ('Información adicional', {'fields': ('empresa', 'role')}),
+    )
+    list_display = ('username', 'email', 'empresa', 'role', 'is_active', 'last_login')
+    list_filter = ('empresa', 'role', 'is_active')
+
 admin.site.register(User, UserAdmin)
+
 
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):

@@ -48,13 +48,13 @@ class DominioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Dominio
         fields = [
-            'id', 'empresa', 'empresa_nombre', 'nombre', 'activo', 'status',
+            'id', 'nombre', 'activo', 'status', 'empresa_nombre',
             'compliance_level', 'dmarc_policy', 'dns_provider', 'dns_provider_zone_id',
             'tags', 'tags_details', 'notification_email', 'notify_on_changes', 
             'notify_on_expiration', 'creado_en', 'actualizado_en', 'last_dns_check', 
             'dns_check_status', 'expiration_date', 'total_dns_records', 'valid_dns_records'
         ]
-        read_only_fields = ['id', 'creado_en', 'actualizado_en', 'last_dns_check', 'dns_check_status']
+        read_only_fields = ['id', 'creado_en', 'actualizado_en', 'empresa', 'last_dns_check', 'dns_check_status']
 
     def validate_nombre(self, value):
         """Validate domain name format"""
