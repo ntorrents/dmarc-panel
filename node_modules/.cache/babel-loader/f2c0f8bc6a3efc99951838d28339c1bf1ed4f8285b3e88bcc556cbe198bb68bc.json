@@ -1,0 +1,1 @@
+{"ast":null,"code":"const formatRelativeLocale = {\n  lastWeek: \"'上個'eeee p\",\n  yesterday: \"'昨天' p\",\n  today: \"'今天' p\",\n  tomorrow: \"'明天' p\",\n  nextWeek: \"'下個'eeee p\",\n  other: \"P\"\n};\nexport const formatRelative = (token, _date, _baseDate, _options) => formatRelativeLocale[token];","map":null,"metadata":{},"sourceType":"module","externalDependencies":[]}

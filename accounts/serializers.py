@@ -12,7 +12,8 @@ class EmpresaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Empresa
         fields = [
-            'id', 'nombre', 'direccion', 'activo', 'creado_en', 
+            'id', 'nombre', 'email', 'telefono', 
+            'direccion', 'activo', 'creado_en', 
             'actualizado_en', 'total_usuarios', 'total_dominios'
         ]
         read_only_fields = ['id', 'creado_en', 'actualizado_en']
